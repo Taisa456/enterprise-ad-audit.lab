@@ -1,4 +1,4 @@
-# Enterprise Defense Lab — AEGIS Systems
+# Enterprise Defense Lab 
 
 A small enterprise network designed, deployed, and audited in a virtualised lab: three-zone segmentation, Active Directory authentication, firewall-controlled access between zones, and a full vulnerability assessment with **Nessus Essentials**.
 

@@ -1,0 +1,33 @@
+# Lessons Learned
+
+Honest retrospective on the build. Useful both as a learning record and as input for whoever reproduces the lab next.
+
+## What Went Well
+
+- **Three-zone design held up under scanning.** Segmentation between Operations and Server resisted the obvious lateral-movement attempts from Kali, exactly as designed.
+- **Nessus Essentials was sufficient** for the unauthenticated assessment scope. The plugin limit didn't bite for an environment this small.
+- **Documentation-first approach** to the firewall matrix made implementation straightforward. The matrix in [firewall-rules.md](./firewall-rules.md) was written before rules were applied and only needed minor adjustment after testing.
+- **Metasploitable 2 produced predictable, well-known findings** which made it easy to validate that the scanner was working correctly before reading too much into other hosts' results.
+
+## What Didn't
+
+- **DNS misconfiguration on Kali** wasted real time during reconnaissance. The host had no resolver pointed at the DC, so SMB/LDAP enumeration tooling that expects to resolve names failed in confusing ways. A pre-flight checklist that includes DNS would have caught it immediately.
+- **`Administrator` account ended up under-privileged.** Group membership was not verified after promotion. In a production setup this would have been caught the first time anyone tried to run an administrative task; in the lab it surfaced only during the audit pass.
+- **NetBIOS was left enabled** without a conscious decision either way. The default-on behaviour of Windows Server quietly produced an information-disclosure finding that didn't need to exist.
+- **Single scanner run.** A second scan after remediation would have demonstrated the deltas more clearly. Time pressure won.
+
+## What I'd Do Differently
+
+1. **Write a build-validation script** that runs after every snapshot restore: pings each host, resolves each name, opens the expected ports, fails fast on anything unexpected. Most of the wasted time during the build was finding regressions by hand.
+2. **Document deliberate findings** (the weak production password, NLA-off RDP) up-front in a `KNOWN-DESIGN-CHOICES.md` so they don't get re-reported every assessment cycle. The lab has roughly four findings that are intentional and four that are accidents; the report should distinguish.
+3. **Use a router VM (pfSense or OPNsense) instead of the DC.** Putting the router on the DC is fine for a four-VM lab but conflates two concerns and makes the firewall rules less portable.
+4. **Add a credentialled scan pass.** Unauthenticated scans miss most of what's interesting on the Windows hosts. With Nessus Essentials this means rotating creds, but it would have produced a more representative report.
+5. **Track findings in a structured file** (the CSV in `scan-reports/`) from the start, rather than re-deriving them from the slide deck after the fact.
+
+## Skills Reinforced
+
+- AD DS promotion and OU/GPO layout.
+- Multi-NIC Windows routing and Defender Firewall rule scoping by profile.
+- Nessus scan-policy selection and report triage.
+- Reading Nessus VPR/EPSS in context rather than treating CVSS as the only number that matters.
+- Writing assessment findings that distinguish *what the issue is*, *why it matters*, *what it could do*, and *how to fix it* — rather than just dumping CVE numbers.

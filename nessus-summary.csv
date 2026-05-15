@@ -1,0 +1,13 @@
+finding_id,host,host_role,plugin_family,name,severity,cvss_v3,vpr,epss,port_proto,notes
+F-MS2-01,172.16.20.100,Metasploitable 2,Backdoors,UnrealIRCd backdoor remote command execution,Critical,10.0,7.4,0.856,6667/tcp,Unauthenticated RCE via backdoored binary.
+F-MS2-02,172.16.20.100,Metasploitable 2,Service detection,Remote shell via default/weak credentials,Critical,10.0,,,multiple,Tomcat manager / VNC / Telnet / FTP default credentials.
+F-MS2-03,172.16.20.100,Metasploitable 2,Web Servers,Web server / app remote code execution,Critical,9.8,,,80/tcp,Vulnerable PHP/Apache and deliberately vulnerable web apps.
+F-MS2-04,172.16.20.100,Metasploitable 2,General,Operating system end-of-life (Ubuntu 8.04 / Linux 2.6),High,,,,,EOL since 2011/2013; permanently unpatched.
+F-MS2-05,172.16.20.100,Metasploitable 2,RPC,RPC service exposure,High,7.5,,,111/tcp,Allows enumeration; multiple downstream issues.
+F-DC-01,172.16.10.10,Windows AD DC,Windows,NetBIOS Name Service open,Medium,,,,137/udp,Discloses host and domain naming for AD reconnaissance.
+F-DC-02,172.16.10.10,Windows AD DC,Virtualization,VMware side-channel mitigations disabled,Medium,,,,,Cross-VM transient state disclosure under specific conditions.
+F-OPWS-01,172.16.10.100,Operator Workstation,Windows,RDP Network Level Authentication disabled,Medium,,,,3389/tcp,Intentional per lab brief; high-severity in production.
+F-OPWS-02,172.16.10.100,Operator Workstation,Windows,SMB signing not required,Medium,,,,445/tcp,Exposes host to relay attacks on a hostile LAN.
+F-OPWS-03,172.16.10.100,Operator Workstation,SSL/TLS,Weak TLS ciphers on RDP listener,Medium,,,,3389/tcp,Outdated cipher suites offered.
+F-KALI-01,172.16.10.200,Kali Linux,Service detection,Service fingerprint disclosure,Medium,,,,,Operational rather than exploitable; expected on a workstation.
+F-KALI-02,172.16.10.200,Kali Linux,General,Unrestricted sudo (ALL:ALL),Informational,,,,,Operational posture; not a Nessus finding strictly speaking.

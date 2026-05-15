@@ -1,0 +1,129 @@
+# Findings
+
+Significant findings from the April 2026 assessment, grouped by host. Severity uses the Nessus output (CVSS v3 where reported). EPSS and VPR values are quoted where Nessus surfaced them and were notable.
+
+---
+
+## Metasploitable 2 — `172.16.20.100`
+
+This host is intentionally vulnerable and serves as the deliberate target of the assessment. Findings below illustrate categories of risk; the host itself is not intended to be hardened.
+
+### F-MS2-01 — UnrealIRCd Backdoor (Critical, CVSS 10.0)
+
+| Field | Value |
+| ----- | ----- |
+| CVSS  | 10.0 (Critical) |
+| VPR   | 7.4 |
+| EPSS  | 0.856 |
+| Port  | TCP 6667 |
+
+**What it is.** UnrealIRCd 3.2.8.1 was distributed with a malicious backdoor that grants arbitrary command execution to an unauthenticated remote attacker.
+
+**Why it matters.** Bypasses authentication entirely. A reachable, vulnerable instance is functionally equivalent to handing the attacker a shell.
+
+**Impact.** Full host compromise. The backdoored service runs as a privileged process, so post-exploitation is unconstrained.
+
+**Mitigation.** Remove the backdoored binary, upgrade to a clean UnrealIRCd release from a trusted source, and rebuild the host if compromise is suspected. For the lab, the existence of the vulnerability is the point — no mitigation applied.
+
+---
+
+### F-MS2-02 — Remote Shell via Default / Weak Credentials (Critical, CVSS 10.0)
+
+| Field | Value |
+| ----- | ----- |
+| CVSS  | 10.0 (Critical) |
+| Affected services | Apache Tomcat manager, VNC, Telnet, FTP, others |
+
+**What it is.** Multiple services accept default or trivial credentials (e.g., `tomcat:tomcat`, VNC `password`, etc.). Several services also run in cleartext.
+
+**Why it matters.** Trivial credential discovery yields direct shell access. No exploitation expertise needed.
+
+**Impact.** Code execution as the service account; in several cases that account has broad filesystem and network access. Provides a pivot point from the Server zone to internal infrastructure — though firewall rules in this lab block the pivot direction.
+
+**Mitigation.** Change all default credentials, disable services that are not required (especially Telnet, rlogin, rsh), enforce key-based auth where possible, and place management interfaces behind a bastion.
+
+---
+
+### F-MS2-03 — Web Server Remote Code Execution (Critical, CVSS 9.8)
+
+| Field | Value |
+| ----- | ----- |
+| CVSS  | 9.8 (Critical) |
+| Affected services | Apache 2.2.x with vulnerable PHP, plus deliberately vulnerable web apps (Mutillidae, DVWA, etc.) |
+
+**What it is.** The web stack has multiple unauthenticated RCE paths through outdated PHP, vulnerable web applications, and CGI exposure.
+
+**Why it matters.** Web RCEs typically run as the web user but routinely chain into local privilege escalation on an EOL host.
+
+**Impact.** Same end-state as the previous two: arbitrary code execution as a non-root user, with several easy LPE paths to root.
+
+**Mitigation.** Patch the application stack, retire the host, or — for the lab — leave it as-is.
+
+---
+
+### F-MS2-04 — Operating System End-of-Life (High, contextual)
+
+**What it is.** Ubuntu 8.04 (Hardy Heron) reached end-of-support in 2013 (server) / 2011 (desktop). Linux kernel 2.6 likewise.
+
+**Why it matters.** No security patches have been issued in over a decade. Every CVE published since EOL is permanently unfixed.
+
+**Impact.** Compounds every other finding on this host. Even if individual services were re-patched, the kernel and userland are not.
+
+**Mitigation.** Upgrade to a currently supported release. For the lab, the EOL state is part of the exercise.
+
+---
+
+## Domain Controller — `172.16.10.10`
+
+### F-DC-01 — NetBIOS Name Service Open (Medium)
+
+| Field | Value |
+| ----- | ----- |
+| Port  | UDP 137 |
+| Severity | Medium (information disclosure → enables targeted attacks) |
+
+**What it is.** UDP 137 (NetBIOS-NS) responds to queries, returning machine and domain naming information.
+
+**Why it matters.** Discloses the domain name (`kbr.local`), netbios name (`KBR-DC01`), and domain role to anyone on the broadcast domain. Useful reconnaissance for an attacker preparing AS-REP roasting, Kerberoasting, or credential-stuffing attacks.
+
+**Impact.** No direct compromise, but materially reduces the work an attacker has to do to map the AD environment.
+
+**Mitigation.** Disable NetBIOS over TCP/IP per interface, or block UDP 137/138 and TCP 139 at the firewall. Modern Windows networks rely on DNS and do not need NetBT for AD operation.
+
+---
+
+### F-DC-02 — VMware Side-Channel Mitigations Disabled (Medium)
+
+**What it is.** The hypervisor reports that side-channel mitigations (the family of controls related to Spectre, Foreshadow, MDS, etc.) are not enabled on this VM.
+
+**Why it matters.** Co-resident VMs on the same physical host can, under specific conditions, read transient state from CPU caches and microarchitectural buffers.
+
+**Impact.** In a multi-tenant environment, theoretical disclosure of secrets in memory across VM boundaries. In an isolated lab, low real-world risk, but worth fixing for fidelity.
+
+**Mitigation.** In the VM's advanced settings, enable "Side-channel mitigations" (`ulm.disableMitigations = "FALSE"`). Accept the small performance cost.
+
+---
+
+## Operator Workstation — `172.16.10.100`
+
+The host returned 5 medium-severity findings, all consistent with a domain-joined Windows workstation accepting RDP without NLA. Notable items:
+
+- **RDP with NLA disabled** — by design for the lab, but in production this would be a high-severity finding.
+- **SMB signing not required** — exposes the host to relay attacks in a hostile-LAN scenario.
+- **SSL/TLS configuration warnings** on the RDP listener — weak ciphers offered.
+
+Mitigations are standard: enable NLA, require SMB signing via GPO, restrict RDP TLS to a minimum of TLS 1.2 with modern ciphers.
+
+---
+
+## Kali Linux — `172.16.10.200`
+
+The host returned 2 medium-severity findings and several low/informational items. Mostly fingerprint disclosure and the inherent posture of a workstation distribution with offensive tooling installed. The most relevant non-vulnerability observation is operational: the Kali account had unrestricted sudo (`ALL:ALL`), which is convenient for lab work but not representative of a hardened workstation.
+
+---
+
+## Cross-Host Themes
+
+- **Information disclosure dominates the non-target hosts.** None of the findings on the DC, Operator, or Kali would compromise the host alone, but several would meaningfully assist an attacker who already had a foothold.
+- **One vulnerable VM compromises the architecture.** Even with strict segmentation, the existence of Metasploitable 2 in the lab means that an attacker landing on the Server zone (e.g., via a misconfigured firewall rule) has immediate full control of that host. Segmentation is the only thing standing between that host and the rest of the lab.
+- **Configuration findings outnumber missing-patch findings.** Every meaningful finding outside Metasploitable was a configuration choice (NLA off, NetBIOS open, mitigations disabled), not a missing update. This is consistent with assessments of well-maintained but loosely-hardened environments.

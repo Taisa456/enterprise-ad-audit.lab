@@ -1,0 +1,46 @@
+# Firewall Rules
+
+The domain controller acts as the inter-zone gateway and enforces the access matrix below. Rules are implemented as Windows Defender Firewall with Advanced Security rules on `KBR-DC01`. The lab intentionally keeps the policy minimal so that each rule maps to one observable behaviour.
+
+## Inter-Zone Access Matrix
+
+| Source → Destination                       | Allowed? | Protocol/Port           | Reason |
+| ------------------------------------------ | -------- | ----------------------- | ------ |
+| WAN → Any internal                         | ❌        | —                       | No unsolicited inbound from upstream. |
+| DC → WAN                                   | ✅        | Any                     | Updates, time, AD-related services. |
+| Operator WS → WAN                          | ❌        | —                       | Privileged-workstation pattern: no direct internet. |
+| Operator WS → DC                           | ✅        | LDAP/Kerberos/DNS/SMB   | Required for domain operation. |
+| Operator WS → Server zone                  | ✅        | Limited (assessment)    | Internal reachability to vulnerable host for evaluation. |
+| Attacker (Kali) → Operator WS              | ✅        | RDP/3389                | Simulated post-compromise foothold. |
+| Attacker (Kali) → DC                       | Partial  | SMB/LDAP (read-only)    | Allows enumeration scenarios. |
+| Attacker (Kali) → Server zone (Metasploit) | ❌        | —                       | Lateral movement to vulnerable host must be blocked at the gateway; demonstrating segmentation. |
+| Server zone → Operations                   | ❌        | —                       | Server zone never initiates connections inbound. |
+| Server zone → WAN                          | ❌        | —                       | Vulnerable host is fully isolated from internet. |
+
+## Implementation Notes
+
+- The DC's three NICs are placed in distinct firewall profiles (Domain on the Ops NIC, Private on the Server NIC, Public on the WAN NIC) so default behaviours differ sensibly.
+- Outbound block for the Operator workstation is applied via GPO at the host firewall layer rather than centrally — this is intentional, to demonstrate GPO-driven policy.
+- Inter-zone routing is performed by the DC's `RemoteAccess` role; firewall rules sit above it.
+
+## Known Issues
+
+- **NetBIOS Name Service (UDP 137) is open on the DC.** This was flagged during scanning. It exposes machine and domain naming information to anyone on the segment and should be closed unless a legacy SMB1/NetBT dependency exists.
+  - Mitigation: disable NetBIOS over TCP/IP on each interface (Network Adapter → Properties → IPv4 → Advanced → WINS → "Disable NetBIOS over TCP/IP"), or block UDP 137/138 and TCP 139 at the firewall.
+- The matrix is not yet enforced bidirectionally with explicit deny rules — the current build relies on default-deny inbound and stateful return traffic. A stricter implementation would add explicit deny rules with logging for each forbidden flow.
+
+## Verification
+
+After applying rules, validate each row of the matrix:
+
+```powershell
+# From operator workstation
+Test-NetConnection 172.16.20.100 -Port 80    # should succeed
+Test-NetConnection 1.1.1.1 -Port 443         # should fail
+```
+
+```bash
+# From Kali
+nmap -Pn -p 3389 172.16.10.100               # should show open
+nmap -Pn -p 22,80,21 172.16.20.100           # should be blocked at gateway
+```

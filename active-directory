@@ -1,0 +1,91 @@
+# Active Directory Configuration
+
+## Forest & Domain
+
+| Item              | Value                       |
+| ----------------- | --------------------------- |
+| Forest root       | `kbr.local`                 |
+| Domain            | `kbr.local`                 |
+| Functional level  | Windows Server 2016 or later|
+| Domain controller | `KBR-DC01`                  |
+| DC OS             | Windows Server 2022         |
+| DC address (Ops)  | `172.16.10.10`              |
+
+DNS is integrated into AD and runs on the DC. The DC is the only authoritative resolver for `kbr.local`.
+
+## Promotion Steps (Summary)
+
+```powershell
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-ADDSForest `
+  -DomainName "kbr.local" `
+  -DomainNetbiosName "KBR" `
+  -InstallDns `
+  -ForestMode "WinThreshold" `
+  -DomainMode "WinThreshold" `
+  -SafeModeAdministratorPassword (Read-Host -AsSecureString "DSRM password")
+```
+
+The DSRM password is **not** stored in the repository. Set it interactively.
+
+## Organisational Units
+
+```
+kbr.local
+└── OU=KBR-Org
+    ├── OU=Admins
+    ├── OU=Support
+    └── OU=Production
+```
+
+See [`diagrams/ad-structure.mmd`](../diagrams/ad-structure.mmd) for the Mermaid version.
+
+## User Accounts
+
+Five accounts were created to satisfy the lab brief. **Passwords are not committed** — substitute your own at build time. The table below describes role and password posture only.
+
+| Username       | OU         | Role / Privileges        | Password Posture                                  |
+| -------------- | ---------- | ------------------------ | ------------------------------------------------- |
+| `Administrator`| Admins     | Domain Administrator     | Strong, set at promotion                          |
+| `support`      | Support    | Standard user            | Strong, locally set                               |
+| `production1` | Production | Standard user, domain-joined to operator WS | **Deliberately weak** per lab requirement (see note below) |
+| `production2` | Production | Standard user            | Strong, locally set                               |
+| `production3` | Production | Standard user            | Strong, locally set                               |
+
+> **Deliberately weak password note** — the lab brief required one production user to have a weak password as part of the assessable surface (so that password attacks could be demonstrated against AD). That password is **not** included in this repository. Anyone reproducing the lab should set their own value and treat it as a known finding rather than something to protect.
+
+## Group Policy
+
+Baseline GPOs applied in the lab:
+
+| GPO                          | Scope             | Effect                                                      |
+| ---------------------------- | ----------------- | ----------------------------------------------------------- |
+| Default Domain Policy        | Domain            | Password length, complexity, lockout thresholds (baseline). |
+| Operator-RDP-Allow           | Operator WS OU    | Enables RDP, opens 3389 to the Ops subnet.                  |
+| Operator-Internet-Deny       | Operator WS OU    | Blocks outbound 80/443 at the host firewall.                |
+
+> The lab intentionally **disables Network Level Authentication** on the operator's RDP, since one objective is to demonstrate the difference between NLA-protected and unprotected RDP. Do not replicate this on production systems.
+
+## Domain Discovery (Reference)
+
+Commands used to confirm AD posture during the lab. None of these write to the domain.
+
+```powershell
+# On a domain-joined host
+gpresult /r
+rsop.msc
+secpol.msc
+netplwiz
+```
+
+```bash
+# From Kali (read-only enumeration once a valid credential is held)
+nxc smb 172.16.10.0/24 -u <user> -p <pass> --users --groups --shares
+```
+
+## Known Configuration Issues
+
+These are documented as findings rather than misconfigurations to fix silently — the report should reflect what was found.
+
+- **Administrator account lacks full domain privileges** in the as-built state. Add to `Domain Admins`, `Enterprise Admins`, and `Schema Admins` as appropriate, or document the intent if reduced privileges were chosen deliberately.
+- **DNS on Kali was not initially configured**, leading to name-resolution failures during reconnaissance. Static DNS pointing at `172.16.10.10` resolves it.

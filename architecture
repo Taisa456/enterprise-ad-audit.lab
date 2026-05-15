@@ -1,0 +1,41 @@
+# Architecture
+
+## Overview
+
+AEGIS Systems is a small enterprise-style lab built to demonstrate segmented network design, centralised authentication, and vulnerability assessment within a controlled environment. The build consists of four virtual machines spread across three logical zones, with the domain controller acting as the inter-zone router.
+
+## Network Zones
+
+| Zone        | Subnet            | Purpose                                                                       |
+| ----------- | ----------------- | ----------------------------------------------------------------------------- |
+| WAN         | Provider-assigned | Upstream internet access. Reachable only from the domain controller.          |
+| Operations  | `172.16.10.0/24`  | Production workstation, attacker host, and the operations-side DC interface.  |
+| Server      | `172.16.20.0/24`  | Internal application/server segment containing the vulnerable target VM.      |
+
+The domain controller carries three network interfaces — one per zone — and provides routing between Operations and Server while terminating the WAN uplink. No other host has more than one interface.
+
+## Host Inventory
+
+| Hostname / Role               | OS                            | Zone        | Address          |
+| ----------------------------- | ----------------------------- | ----------- | ---------------- |
+| `KBR-DC01` (Domain Controller)| Windows Server 2022           | Ops + Server + WAN | `172.16.10.10` (Ops) |
+| Operator workstation          | Windows 10/11                 | Operations  | `172.16.10.100`  |
+| Attacker host                 | Kali Linux                    | Operations  | `172.16.10.200`  |
+| Vulnerable target             | Metasploitable 2 (Ubuntu 8.04)| Server      | `172.16.20.100`  |
+
+> The Server zone contains Metasploitable 2 by design — it is an intentionally vulnerable image used for authorised assessment. It is never exposed beyond the lab.
+
+## Routing & Reachability Summary
+
+- The DC routes between Operations and Server.
+- The attacker host can reach the Operator workstation (RDP) but is firewall-blocked from the Server zone.
+- The Operator workstation is denied outbound internet.
+- The DC itself reaches the internet for updates and AD-related services.
+- The vulnerable target is reachable from the internal zones but unreachable from the attacker.
+
+## Design Rationale
+
+- **Three zones rather than two** — separating WAN, Operations, and Server makes egress filtering and lateral-movement controls easier to reason about and to demonstrate.
+- **DC as router** — keeps the lab to four VMs while still exercising firewall rule design. In production, the router/firewall would be a separate appliance and the DC would not be multi-homed.
+- **Operator denied internet** — models a privileged-workstation pattern where outbound browsing is blocked at the gateway.
+- **Attacker placed inside Operations** — simulates an initial-foothold scenario (e.g., post-phishing) rather than an external attacker, which is more realistic for AD lateral-movement scenarios.
